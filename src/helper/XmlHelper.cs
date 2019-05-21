@@ -1,14 +1,10 @@
-using Microsoft.Xna.Framework.Content.Pipeline.Serialization.Intermediate;
-using System;
-using System.IO;
 using System.Text.RegularExpressions;
-using System.Xml;
-using System.Linq;
 using System.Collections.Generic;
 using System.Collections;
 using System.Reflection;
-using Microsoft.Xna.Framework.Content;
-using Chaotx.Mgx;
+using System.Xml;
+using System.IO;
+using System;
 
 namespace Chaotx.Mgx.Pipeline {
     delegate int XmlNodeComparer(XmlNode n1, XmlNode n2);
@@ -126,6 +122,14 @@ namespace Chaotx.Mgx.Pipeline {
                         : DefaultComparer(n1, n2);
                 };
 
+                // TODO test! orders already present child nodes
+                // var children = node.ChildNodes;
+                // node.RemoveAll();
+                // foreach(XmlNode child in children) {
+                //     if(node.LastChild == null) node.AppendChild(child);
+                //     else node.LastChild.AddSibling(child, comparer);
+                // }
+
                 foreach(XmlNode child in root.ChildNodes) {
                     var probe = GetChildNode(node, child.Name);
                     var mtype = ImportHelper.GetAssignedMember(child.Name, type);
@@ -155,8 +159,11 @@ namespace Chaotx.Mgx.Pipeline {
         }
 
         /// <summary>
-        /// Adds a siblin next (before or after)
-        /// this node.
+        /// Adds a sibling next to this node. The comparer
+        /// function resolves if a the new node should be
+        /// placed before or after the node. This process
+        /// may be repeated recursivly until the node is
+        /// placed at the lowest/highest possible position.
         /// </summary>
         /// <param name="node">Node the sibling is added to next</param>
         /// <param name="sib">Node to add as new sibbling</param>

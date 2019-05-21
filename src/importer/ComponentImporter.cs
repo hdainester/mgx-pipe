@@ -1,17 +1,9 @@
 using Microsoft.Xna.Framework.Content.Pipeline;
-using Microsoft.Xna.Framework.Content;
+using Chaotx.Mgx.Assets;
 
-using System.Text.RegularExpressions;
-using System.Collections.Generic;
 using System.Collections;
 using System.Reflection;
-using System.Linq;
 using System.Xml;
-using System.IO;
-using System;
-
-using Chaotx.Mgx.Assets;
-using Chaotx.Mgx.Layout;
 
 namespace Chaotx.Mgx.Pipeline {
     [ContentImporter(".xml", ".mgxml", DisplayName = "Mgxml Importer - MonoGame Mgx", DefaultProcessor = "PassThroughProcessor")]
@@ -62,7 +54,7 @@ namespace Chaotx.Mgx.Pipeline {
 
                 var col = next as IList;
                 if(col != null) next = col[index++];
-                var ass = next as Asset;
+                var ass = next as IAsset;
                 if(ass != null) next = ass.RawObject;
                 ParseAttributes(child, next);
             }

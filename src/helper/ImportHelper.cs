@@ -1,10 +1,9 @@
-using System;
-using System.Linq;
-using System.Collections;
+using Microsoft.Xna.Framework.Content;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Linq;
 using System.Xml;
-using Microsoft.Xna.Framework.Content;
+using System;
 
 namespace Chaotx.Mgx.Pipeline {
     public static class ImportHelper {
@@ -85,7 +84,7 @@ namespace Chaotx.Mgx.Pipeline {
             MemberAlias[type.FullName].Add(name, _mem);
             return _mem;
         }
-        
+
         internal static void SetMemberValue(this object obj, string member, object val) {
             var mem = obj.GetType().GetAllMembers()
                 .Where(p => p.Name.Equals(member))
@@ -101,10 +100,7 @@ namespace Chaotx.Mgx.Pipeline {
                 string.Format("member \"{0}\" is of type function", member));
 
             if(prop != null && !prop.CanWrite) throw new XmlException(
-                string.Format("property \"{}\" is readonly", member));
-
-            if(field != null) throw new XmlException(
-                string.Format("field \"{}\" is readonly", member));
+                string.Format("property \"{0}\" is readonly", member));
 
             if(prop != null) prop.SetValue(obj, val);
             else if(field != null) field.SetValue(obj, val);
