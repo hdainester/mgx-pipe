@@ -7,17 +7,13 @@ using System.IO;
 using System;
 
 namespace Chaotx.Mgx.Pipeline {
-    delegate int XmlNodeComparer(XmlNode n1, XmlNode n2);
-
     public static class XmlHelper {
-        internal static XmlNodeComparer DefaultComparer;
-        internal static HashSet<XmlNode> NewNodes;
+        internal static Comparison<XmlNode> DefaultComparer;
         internal static string ContentRoot {get; set;}
 
         static XmlHelper() {
             // By default nodes are compared by their name
             DefaultComparer = (n1, n2) => n1.Name.CompareTo(n2.Name);
-            NewNodes = new HashSet<XmlNode>();
         }
 
         /// <summary>
@@ -82,6 +78,7 @@ namespace Chaotx.Mgx.Pipeline {
         /// <param name="contentRoot">Path to content folder</param>
         public static void ResolveTemplates(this XmlNode node, string contentRoot = null) {
             if(ContentRoot == null) ContentRoot = contentRoot;
+            HashSet<XmlNode> newNodes = new HashSet<XmlNode>();
             string attValue = null;
 
             if((attValue = node.GetAttributeValue("Template")) != null) {
@@ -90,7 +87,7 @@ namespace Chaotx.Mgx.Pipeline {
                 doc.Load(ResolvePath(attValue));
                 var root = doc.SelectSingleNode("/XnaContent/Asset");
 
-                // add attributes that are not already present
+                // add template attributes that are not already present to node
                 if(root.Attributes != null) {
                     foreach(XmlAttribute att in root.Attributes)
                         if(node.GetAttributeValue(att.Name) == null) {
@@ -103,9 +100,36 @@ namespace Chaotx.Mgx.Pipeline {
                 // because of this line full type name is required in xml (TODO)
                 var type = Type.GetType(root.GetAttributeValue("Type") + ", mgx", true);
 
-                // a custom comparer is used comparing the
-                // members mapped by the node names
-                XmlNodeComparer comparer = (n1, n2) => {
+                // add template elements that are not already present to node
+                foreach(XmlNode child in root.ChildNodes) {
+                    var probe = GetChildNode(node, child.Name);
+                    var mtype = ImportHelper.GetAssignedMember(child.Name, type);
+                    var ptype = mtype as PropertyInfo;
+                    var ftype = mtype as FieldInfo;
+
+                    // TODO throws exception for method members
+                    if(probe == null || typeof(IList).IsAssignableFrom(
+                    ptype != null ? ptype.PropertyType : ftype.FieldType)) {
+                        var imp = node.AppendChild(node.OwnerDocument
+                            .ImportNode(child, true));
+
+                        newNodes.Add(imp);
+                        node.AppendChild(imp);
+                    }
+                }
+            }
+
+            // sort children of node
+            string tstr;
+            if((tstr = node.GetAttributeValue("Type")) != null) {
+                var type = Type.GetType(tstr + ", mgx", true);
+                // A custom comparer which compares by the Ordered attribute
+                // of the associated properties matching the tag name of the nodes
+                node.SortChildren((n1, n2) => {
+                    if(n1.NodeType != XmlNodeType.Element
+                    || n2.NodeType != XmlNodeType.Element)
+                        return 0;
+                        
                     var mem1 = ImportHelper.GetAssignedMember(n1.Name, type);
                     var mem2 = ImportHelper.GetAssignedMember(n2.Name, type);
                     if(mem1.DeclaringType.IsSubclassOf(mem2.DeclaringType)) return 1;
@@ -117,75 +141,22 @@ namespace Chaotx.Mgx.Pipeline {
                     var att2 = mem2.GetCustomAttribute(
                         typeof(OrderedAttribute), true) as OrderedAttribute;
 
-                    return att1 != null && att2 != null
+                    int c = att1 != null && att2 != null
                         ? att1.Order.CompareTo(att2.Order)
                         : DefaultComparer(n1, n2);
-                };
 
-                // TODO test! orders already present child nodes
-                // var children = node.ChildNodes;
-                // node.RemoveAll();
-                // foreach(XmlNode child in children) {
-                //     if(node.LastChild == null) node.AppendChild(child);
-                //     else node.LastChild.AddSibling(child, comparer);
-                // }
-
-                foreach(XmlNode child in root.ChildNodes) {
-                    var probe = GetChildNode(node, child.Name);
-                    var mtype = ImportHelper.GetAssignedMember(child.Name, type);
-                    var ptype = mtype as PropertyInfo;
-                    var ftype = mtype as FieldInfo;
-
-                    // TODO throws exception for method members
-                    if(probe == null || typeof(IList).IsAssignableFrom(
-                    ptype != null ? ptype.PropertyType : ftype.FieldType)) {
-                        var last = node.LastChild;
-                        var imp = node.AppendChild(node.OwnerDocument
-                            .ImportNode(child, true));
-
-                        NewNodes.Add(imp);
-                        if(last == null)
-                            node.AppendChild(imp);
-                        else last.AddSibling(imp, comparer);
+                    if(c == 0) {
+                        if(newNodes.Contains(n1) && !newNodes.Contains(n2)) c = -1;
+                        if(newNodes.Contains(n2) && !newNodes.Contains(n1)) c = 1;
                     }
-                }
 
-                NewNodes.Clear();
+                    return c;
+                });
             }
 
             // go down recursively
             foreach(XmlNode child in node.ChildNodes)
                 ResolveTemplates(child);
-        }
-
-        /// <summary>
-        /// Adds a sibling next to this node. The comparer
-        /// function resolves if a the new node should be
-        /// placed before or after the node. This process
-        /// may be repeated recursivly until the node is
-        /// placed at the lowest/highest possible position.
-        /// </summary>
-        /// <param name="node">Node the sibling is added to next</param>
-        /// <param name="sib">Node to add as new sibbling</param>
-        /// <param name="comparer">Comparer function</param>
-        /// <param name="rLeft">Recursive left</param>
-        /// <param name="rRight">Recursive right</param>
-        internal static void AddSibling(this XmlNode node, XmlNode sib,
-        XmlNodeComparer comparer = null, bool rLeft = true, bool rRight = true) {
-            if(node == sib) return; // assumed to be alreay in correct spot
-            if(comparer == null) comparer = DefaultComparer;
-            int c = comparer(sib, node);
-            if(c == 0 && !node.IsNew()) c = -1;
-
-            if(c < 0) {
-                if(!rLeft || node.PreviousSibling == null)
-                    node.ParentNode.InsertBefore(sib, node);
-                else node.PreviousSibling.AddSibling(sib, comparer, rLeft, false);
-            } else {
-                if(!rRight || node.NextSibling == null)
-                    node.ParentNode.InsertAfter(sib, node);
-                else node.NextSibling.AddSibling(sib, comparer, false, rRight);
-            }
         }
 
         internal static XmlNode GetChildNode(this XmlNode node, string name) {
@@ -210,9 +181,16 @@ namespace Chaotx.Mgx.Pipeline {
                 : node.Attributes.GetNamedItem(name) == null ? null
                 : node.Attributes.GetNamedItem(name).Value;
         }
+        
+        internal static void SortChildren(this XmlNode node, Comparison<XmlNode> comparer = null) {
+            if(comparer == null) comparer = DefaultComparer;
+            var children = node.GetChildNodes();
 
-        internal static bool IsNew(this XmlNode node) {
-            return NewNodes.Contains(node);
+            children.Sort(comparer);
+            children.ForEach(child => {
+                node.RemoveChild(child);
+                node.AppendChild(child);
+            });
         }
 
         // TODO report exception (help!)
