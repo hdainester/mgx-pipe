@@ -67,7 +67,7 @@ namespace Chaotx.Mgx.Pipeline {
                 return MemberAlias[type.FullName][name];
 
             var mems = type.GetAllMembers();
-            foreach(var prop in type.GetAllMembers()) {
+            foreach(var prop in mems) {
                 var atts = prop.GetCustomAttributes(
                     typeof(ContentSerializerAttribute), true) as ContentSerializerAttribute[];
 

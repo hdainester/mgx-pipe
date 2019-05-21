@@ -27,7 +27,7 @@ namespace Chaotx.Mgx.Pipeline {
             return (ContentRoot == null ? relativePath
                 : ContentRoot + "/" + relativePath) + ".mgxml";
         }
-
+        
         /// <summary>
         /// Parses the given file, which is expected
         /// to be in mgxml format, to the native xml
@@ -35,6 +35,7 @@ namespace Chaotx.Mgx.Pipeline {
         /// </summary>
         /// <param name="filename"></param>
         /// <returns>Path to native file</returns>
+        [Obsolete("No more mgxml -> xml parsing required")]
         public static string ParseToNativeXml(string filename) {
             string raw = File.ReadAllText(filename);
             string outfile = filename + ".native";
@@ -49,6 +50,7 @@ namespace Chaotx.Mgx.Pipeline {
         /// </summary>
         /// <param name="raw">Raw mgxml text</param>
         /// <returns>Native xml text</returns>
+        [Obsolete("No more mgxml -> xml parsing required")]
         internal static string ParseRaw(string raw) {
             raw = Regex.Replace(raw, @"<(\w+)(\s+\w[\w\s=/'""\.]*?)\s*/>",
                 match => match.Result(@"<$1$2></$1>"));
@@ -72,7 +74,9 @@ namespace Chaotx.Mgx.Pipeline {
         /// <summary>
         /// Scans the document for Template attributes
         /// and inserts the content of the referenced
-        /// files recursivley. 
+        /// files recursivley. All nodes are sorted
+        /// using a custom comparer (see below) after the
+        /// the insertion process.
         /// </summary>
         /// <param name="node">Root node of the xml document</param>
         /// <param name="contentRoot">Path to content folder</param>
@@ -101,13 +105,16 @@ namespace Chaotx.Mgx.Pipeline {
                 var type = Type.GetType(root.GetAttributeValue("Type") + ", mgx", true);
 
                 // add template elements that are not already present to node
-                foreach(XmlNode child in root.ChildNodes) {
+                foreach(XmlNode child in root.ChildNodes)
+                if(child.NodeType == XmlNodeType.Element) {
                     var probe = GetChildNode(node, child.Name);
                     var mtype = ImportHelper.GetAssignedMember(child.Name, type);
                     var ptype = mtype as PropertyInfo;
                     var ftype = mtype as FieldInfo;
 
-                    // TODO throws exception for method members
+                    if(ptype == null && ftype == null) throw new XmlException(
+                        string.Format("no such non method member \"{0}\" in {1}", child.Name, type));
+
                     if(probe == null || typeof(IList).IsAssignableFrom(
                     ptype != null ? ptype.PropertyType : ftype.FieldType)) {
                         var imp = node.AppendChild(node.OwnerDocument
@@ -132,6 +139,13 @@ namespace Chaotx.Mgx.Pipeline {
                         
                     var mem1 = ImportHelper.GetAssignedMember(n1.Name, type);
                     var mem2 = ImportHelper.GetAssignedMember(n2.Name, type);
+                    
+                    if(mem1 == null) throw new XmlException(
+                        string.Format("no such member \"{0}\" in {1}", n1.Name, type));
+
+                    if(mem2 == null) throw new XmlException(
+                        string.Format("no such member \"{0}\" in {1}", n2.Name, type));
+
                     if(mem1.DeclaringType.IsSubclassOf(mem2.DeclaringType)) return 1;
                     if(mem2.DeclaringType.IsSubclassOf(mem1.DeclaringType)) return -1;
 

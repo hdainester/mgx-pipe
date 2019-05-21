@@ -1,5 +1,4 @@
 using Microsoft.Xna.Framework.Content.Pipeline;
-using Chaotx.Mgx.Assets;
 
 using System.Collections;
 using System.Reflection;
@@ -17,11 +16,9 @@ namespace Chaotx.Mgx.Pipeline {
             XmlHelper.ResolveTemplates(root);
             doc.Save(templateFile);
 
-            string nativeFile = XmlHelper.ParseToNativeXml(templateFile);
-            var obj = base.Import(nativeFile, context);
+            var obj = base.Import(templateFile, context);
             ParseAttributes(root, obj);
             // File.Delete(templateFile);
-            // File.Delete(nativeFile);
             return obj;
         }
 
@@ -54,8 +51,6 @@ namespace Chaotx.Mgx.Pipeline {
 
                 var col = next as IList;
                 if(col != null) next = col[index++];
-                var ass = next as IAsset;
-                if(ass != null) next = ass.RawObject;
                 ParseAttributes(child, next);
             }
         }
