@@ -27,7 +27,7 @@ namespace Chaotx.Mgx.Pipeline {
             return (ContentRoot == null ? relativePath
                 : ContentRoot + "/" + relativePath) + ".mgxml";
         }
-        
+
         /// <summary>
         /// Parses the given file, which is expected
         /// to be in mgxml format, to the native xml
@@ -93,12 +93,13 @@ namespace Chaotx.Mgx.Pipeline {
 
                 // add template attributes that are not already present to node
                 if(root.Attributes != null) {
-                    foreach(XmlAttribute att in root.Attributes)
+                    foreach(XmlAttribute att in root.Attributes) {
                         if(node.GetAttributeValue(att.Name) == null) {
                             var clone = node.OwnerDocument.CreateAttribute(att.Name);
                             clone.Value = att.Value;
                             node.Attributes.Append(clone);
                         }
+                    }
                 }
 
                 // because of this line full type name is required in xml (TODO)
@@ -169,8 +170,22 @@ namespace Chaotx.Mgx.Pipeline {
             }
 
             // go down recursively
-            foreach(XmlNode child in node.ChildNodes)
+            foreach(XmlNode child in node.ChildNodes) {
                 ResolveTemplates(child);
+                child.ConcatAttributeValue(node, "Id", ".", true);
+            }
+        }
+
+        internal static void ConcatAttributeValue(this XmlNode target, XmlNode source, string attName, string separator = "", bool toFront = false) {
+            if(source == null) return;
+            XmlNode srcAtt = source.Attributes != null ? source.Attributes.GetNamedItem(attName) : null;
+            XmlNode tgtAtt = target.Attributes != null ? target.Attributes.GetNamedItem(attName) : null;
+            if(srcAtt != null && tgtAtt != null) {
+                if(!toFront) tgtAtt.Value += separator + srcAtt.Value;
+                else tgtAtt.Value = srcAtt.Value + separator + tgtAtt.Value;
+            }
+
+            target.ConcatAttributeValue(source.ParentNode, attName, ".", toFront);
         }
 
         internal static XmlNode GetChildNode(this XmlNode node, string name) {
