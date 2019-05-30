@@ -9,7 +9,6 @@ using System;
 namespace Chaotx.Mgx.Pipeline {
     public static class XmlHelper {
         internal static Comparison<XmlNode> DefaultComparer;
-        internal static string ContentRoot {get; set;}
 
         static XmlHelper() {
             // By default nodes are compared by their name
@@ -23,9 +22,11 @@ namespace Chaotx.Mgx.Pipeline {
         /// </summary>
         /// <param name="relativePath"></param>
         /// <returns>Absolute path</returns>
+        [Obsolete("ContentRoot was dropped")]
         internal static string ResolvePath(string relativePath) {
-            return (ContentRoot == null ? relativePath
-                : ContentRoot + "/" + relativePath) + ".mgxml";
+            return relativePath;
+            // return (ContentRoot == null ? relativePath
+            //     : ContentRoot + "/" + relativePath) + ".mgxml";
         }
 
         /// <summary>
@@ -36,7 +37,7 @@ namespace Chaotx.Mgx.Pipeline {
         /// <param name="filename"></param>
         /// <returns>Path to native file</returns>
         [Obsolete("No more mgxml -> xml parsing required")]
-        public static string ParseToNativeXml(string filename) {
+        internal static string ParseToNativeXml(string filename) {
             string raw = File.ReadAllText(filename);
             string outfile = filename + ".native";
             string parsed = ParseRaw(raw);
@@ -80,15 +81,14 @@ namespace Chaotx.Mgx.Pipeline {
         /// </summary>
         /// <param name="node">Root node of the xml document</param>
         /// <param name="contentRoot">Path to content folder</param>
-        public static void ResolveTemplates(this XmlNode node, string contentRoot = null) {
-            if(ContentRoot == null) ContentRoot = contentRoot;
+        internal static void ResolveTemplates(this XmlNode node, string contentRoot = "") {
             HashSet<XmlNode> newNodes = new HashSet<XmlNode>();
             string attValue = null;
 
             if((attValue = node.GetAttributeValue("Template")) != null) {
                 // load template document
                 XmlDocument doc = new XmlDocument();
-                doc.Load(ResolvePath(attValue));
+                doc.Load(contentRoot + attValue + ".mgxml");
                 var root = doc.SelectSingleNode("/XnaContent/Asset");
 
                 // add template attributes that are not already present to node
@@ -171,7 +171,7 @@ namespace Chaotx.Mgx.Pipeline {
 
             // go down recursively
             foreach(XmlNode child in node.ChildNodes) {
-                ResolveTemplates(child);
+                ResolveTemplates(child, contentRoot);
                 child.ConcatAttributeValue(node, "Id", ".", true);
             }
         }

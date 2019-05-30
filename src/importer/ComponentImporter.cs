@@ -25,12 +25,12 @@ namespace Chaotx.Mgx.Pipeline {
         /// <summary>
         /// Parse attributes from the xml tree and assigns
         /// the values to the object. Moves down recursively
-        /// therofere the object member types and order
+        /// therefore the object member types and order
         /// must exactly match the structure of the tree.
         /// </summary>
         /// <param name="node">Root node of the xml document</param>
         /// <param name="obj">Object to assign members on</param>
-        public static void ParseAttributes(XmlNode node, object obj) {
+        internal static void ParseAttributes(XmlNode node, object obj) {
             if(obj == null) return;
             ImportHelper.AssignAttributes(node, obj, "Type", "Template");
 
@@ -50,7 +50,9 @@ namespace Chaotx.Mgx.Pipeline {
                 }
 
                 var col = next as IList;
-                if(col != null) next = col[index++];
+                if(col != null) next =
+                    col.Count == 0 ? null : col[index++];
+
                 ParseAttributes(child, next);
             }
         }

@@ -29,7 +29,7 @@ namespace Chaotx.Mgx.Pipeline {
         /// <param name="node">Xml node to read from</param>
         /// <param name="obj">Object whose properties to set</param>
         /// <param name="ign">Attributes to be ignored</param>
-        public static void AssignAttributes(XmlNode node, object obj, params string[] ign) {
+        internal static void AssignAttributes(XmlNode node, object obj, params string[] ign) {
             bool ignore;
             if(node.Attributes != null) {
                 foreach(XmlAttribute attb in node.Attributes) {
