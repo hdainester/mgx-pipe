@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using System.Collections.Generic;
 using System.Collections;
 using System.Reflection;
+using System.Linq;
 using System.Xml;
 using System.IO;
 using System;
@@ -16,60 +17,31 @@ namespace Chaotx.Mgx.Pipeline {
         }
 
         /// <summary>
-        /// Converts the given relative path to the
-        /// absolute file path dependent of the root
-        /// from the ContentImporterContext.
+        /// Scans referenced assemblies with names beeing a
+        /// member of the whitelist for a given type that
+        /// matches or ends with the passed name. If the
+        /// whitelist is empty all referenced assemblies
+        /// will be scanned. Throws an exception if no or
+        /// more than one type was found.
         /// </summary>
-        /// <param name="relativePath"></param>
-        /// <returns>Absolute path</returns>
-        [Obsolete("ContentRoot was dropped")]
-        internal static string ResolvePath(string relativePath) {
-            return relativePath;
-            // return (ContentRoot == null ? relativePath
-            //     : ContentRoot + "/" + relativePath) + ".mgxml";
-        }
+        /// <param name="name">Unqualified name of the type</param>
+        /// <param name="whitelist">Assemblies to scan in</param>
+        /// <returns>Type matching the name</returns>
+        internal static Type FindType(string name, params string[] whitelist) {
+            List<Type> types = new List<Type>();
+            Assembly.GetCallingAssembly().GetReferencedAssemblies()
+                .Where(a => whitelist.Length == 0 || whitelist.Contains(a.Name)).ToList()
+                .ForEach(an => types.AddRange(Assembly
+                    .Load(an).GetTypes()
+                    .Where(t => t.FullName.EndsWith(name))));
+            
+            if(types.Count == 0) throw new ArgumentException(
+                string.Format("no such type \"{0}\"", name));
 
-        /// <summary>
-        /// Parses the given file, which is expected
-        /// to be in mgxml format, to the native xml
-        /// format from Xna.
-        /// </summary>
-        /// <param name="filename"></param>
-        /// <returns>Path to native file</returns>
-        [Obsolete("No more mgxml -> xml parsing required")]
-        internal static string ParseToNativeXml(string filename) {
-            string raw = File.ReadAllText(filename);
-            string outfile = filename + ".native";
-            string parsed = ParseRaw(raw);
-            File.WriteAllText(outfile, parsed);
-            return outfile;
-        }
+            if(types.Count > 1) throw new ArgumentException(
+                string.Format("\"{0}\" is ambiguous", name));
 
-        /// <summary>
-        /// Performs raw text replacement on the passed
-        /// raw mgxml string and returns it in native format.
-        /// </summary>
-        /// <param name="raw">Raw mgxml text</param>
-        /// <returns>Native xml text</returns>
-        [Obsolete("No more mgxml -> xml parsing required")]
-        internal static string ParseRaw(string raw) {
-            raw = Regex.Replace(raw, @"<(\w+)(\s+\w[\w\s=/'""\.]*?)\s*/>",
-                match => match.Result(@"<$1$2></$1>"));
-
-            raw = Regex.Replace(raw, @"<(\w+)Asset(\s+\w[\w\s=/'""\.]*)?>",
-                match => match.Result(@"<$1Asset><Properties$2>"));
-
-            string pattern =
-                @"<(\w+)Asset\s*>\s*<Properties"
-                + @"(\s+\w[\w\s=/'""\.]*?)?\s*"
-                + @"(Template\s*=\s*""[\w\s/\.]*?"")"
-                + @"(\s*)(\w[\w\s=/'""\.]*?\s*)?>";
-
-            raw = Regex.Replace(raw, pattern, match =>
-                match.Result(@"<$1Asset $3><Properties$2$4$5>"));
-
-            return Regex.Replace(raw, @"</(\w+)Asset\s*>", match =>
-                match.Result("</Properties></$1Asset>"));
+            return types[0];
         }
 
         /// <summary>
@@ -84,12 +56,14 @@ namespace Chaotx.Mgx.Pipeline {
         internal static void ResolveTemplates(this XmlNode node, string contentRoot = "") {
             HashSet<XmlNode> newNodes = new HashSet<XmlNode>();
             string attValue = null;
+            string tstr;
 
             if((attValue = node.GetAttributeValue("Template")) != null) {
                 // load template document
                 XmlDocument doc = new XmlDocument();
                 doc.Load(contentRoot + attValue + ".mgxml");
                 var root = doc.SelectSingleNode("/XnaContent/Asset");
+                var type = FindType(root.GetAttributeValue("Type"), "mgx");
 
                 // add template attributes that are not already present to node
                 if(root.Attributes != null) {
@@ -101,9 +75,6 @@ namespace Chaotx.Mgx.Pipeline {
                         }
                     }
                 }
-
-                // because of this line full type name is required in xml (TODO)
-                var type = Type.GetType(root.GetAttributeValue("Type") + ", mgx", true);
 
                 // add template elements that are not already present to node
                 foreach(XmlNode child in root.ChildNodes)
@@ -126,11 +97,11 @@ namespace Chaotx.Mgx.Pipeline {
                     }
                 }
             }
-
+            
             // sort children of node
-            string tstr;
             if((tstr = node.GetAttributeValue("Type")) != null) {
-                var type = Type.GetType(tstr + ", mgx", true);
+                var type = FindType(tstr, "mgx");
+
                 // A custom comparer which compares by the Ordered attribute
                 // of the associated properties matching the tag name of the nodes
                 node.SortChildren((n1, n2) => {
@@ -221,18 +192,5 @@ namespace Chaotx.Mgx.Pipeline {
                 node.AppendChild(child);
             });
         }
-
-        // TODO report exception (help!)
-        // static XmlNode CreateSample(Type type) {
-        //     XmlDocument doc = new XmlDocument();
-        //     using(XmlWriter writer = doc.CreateNavigator().AppendChild()) {
-        //         var sample = Activator.CreateInstance(type);
-        //         // TODO report exception: Colud not load assembly
-        //         IntermediateSerializer.Serialize(writer, sample, null);
-        //     }
-
-        //     doc.Save("_sample.xml");
-        //     return doc.SelectSingleNode("/XnaContent/Asset");
-        // }
     }
 }
